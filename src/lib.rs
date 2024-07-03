@@ -46,11 +46,67 @@ fn matrix_multiply(a: Vec<Vec<i32>>, b: Vec<Vec<i32>>) -> PyResult<Vec<Vec<i32>>
     Ok(result)
 }
 
+#[pyfunction]
+fn par_argsort(xs: &[i32]) -> Vec<usize> {
+    type Candidate = (i32, usize);
+
+    fn merge(left: &[Candidate], right: &[Candidate]) -> Vec<Candidate> {
+        let mut combined = Vec::with_capacity(left.len() + right.len());
+        let (mut i, mut j) = (0, 0);
+
+        while i < left.len() && j < right.len() {
+            if left[i].0 <= right[j].0 {
+                combined.push(left[i]);
+                i += 1;
+            } else {
+                combined.push(right[j]);
+                j += 1;
+            }
+        }
+
+        if i < left.len() {
+            combined.extend_from_slice(&left[i..]);
+        }
+
+        if j < right.len() {
+            combined.extend_from_slice(&right[j..]);
+        }
+
+        combined
+    }
+
+    if xs.len() <= 1 {
+        return (0..xs.len()).collect();
+    }
+
+    let mid = xs.len() / 2;
+    let (left, right) = xs.split_at(mid);
+
+    let (left_sorted, right_sorted) = rayon::join(
+        || par_argsort(left),
+        || par_argsort(right),
+    );
+
+    let left_candidates: Vec<Candidate> = left_sorted.iter().map(|&i| (xs[i], i)).collect();
+    let right_candidates: Vec<Candidate> = right_sorted.iter().map(|&i| (xs[i + mid], i + mid)).collect();
+
+    let merged_candidates = merge(&left_candidates, &right_candidates);
+
+    merged_candidates.into_iter().map(|c| c.1).collect()
+}
+
+#[pyfunction]
+fn par_argsort_module(py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(par_argsort, m)?)?;
+    Ok(())
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn dotpro(m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dot_product, m)?)?;
     m.add_function(wrap_pyfunction!(matrix_multiply, m)?)?;
     m.add_function(wrap_pyfunction!(dot_product_any, m)?)?;
+    m.add_function(wrap_pyfunction!(par_argsort_module, m)?)?;
     Ok(())
 }
