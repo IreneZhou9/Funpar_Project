@@ -10,8 +10,7 @@ use numpy::{PyArray1, ToPyArray};
 //     Ok(result)
 // }
 fn dot_product(x: Vec<f64>, y: Vec<f64>) -> PyResult<f64> {
-    let result: f64 = x.par_iter().zip(y.par_iter()).map(|(xi, yi)| xi * yi).sum();
-    Ok(result)
+    Ok(x.par_iter().zip(y.par_iter()).map(|(xi, yi)| xi * yi).sum())
 }
 
 #[pyfunction]
