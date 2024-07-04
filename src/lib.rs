@@ -5,6 +5,7 @@ use nalgebra::DMatrix;
 use numpy::{PyArray1, ToPyArray};
 
 //test
+//test
 #[pyfunction]
 // fn dot_product(x: Vec<i32>, y: Vec<i32>) -> PyResult<i32> {
 //     let result = x.par_iter().zip(y.par_iter()).map(|(xi, yi)| xi * yi).sum();
