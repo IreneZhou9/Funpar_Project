@@ -31,16 +31,21 @@ fn dot_product_any(py: Python, x: &PyAny, y: &PyAny) -> PyResult<f64> {
 }
 
 #[pyfunction]
-fn dot_product_par_simd(x: &PyAny, y: &PyAny) -> PyResult<f64> {
+unsafe fn dot_product_par_simd(x: &PyAny, y: &PyAny) -> PyResult<f64> {
     let x_array: &PyArray1<f64> = x.extract()?;
     let y_array: &PyArray1<f64> = y.extract()?;
 
-    let x_vec: Vec<f64> = x_array.to_vec()?;
-    let y_vec: Vec<f64> = y_array.to_vec()?;
+    // let x_vec: Vec<f64> = x_array.to_vec()?;
+    // let y_vec: Vec<f64> = y_array.to_vec()?;
 
     const PAR_CHUNK_SIZE: usize = 8*16*16_384;
 
-    Ok(x_vec.par_chunks(PAR_CHUNK_SIZE).zip(y_vec.par_chunks(PAR_CHUNK_SIZE)).map(|(chunk_x, chunk_y)| dot(chunk_x, chunk_y)).sum())
+    // Ok(x_vec.par_chunks(PAR_CHUNK_SIZE).zip(y_vec.par_chunks(PAR_CHUNK_SIZE)).map(|(chunk_x, chunk_y)| dot(chunk_x, chunk_y)).sum())
+
+    Ok(x_array.as_slice()?.par_chunks(PAR_CHUNK_SIZE)
+        .zip(y_array.as_slice()?.par_chunks(PAR_CHUNK_SIZE))
+        .map(|(chunk_x, chunk_y)| dot(chunk_x, chunk_y))
+        .sum())
 }
 
 fn dot(xs: &[f64], ys: &[f64]) -> f64 {
