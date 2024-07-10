@@ -96,67 +96,36 @@ fn matrix_mul_optimized_parallel(py: Python, mat1: &PyAny, mat2: &PyAny) -> PyRe
     let result_pylist = result.map(|&x| x.to_object(py)).into_pyarray(py).to_object(py);
     Ok(result_pylist)
 }
+
+// argsort
+fn quicksort<T: Ord + Send>(array: &mut [T]) {
+    if array.len() <= 1 {
+        return;
+    }
+    let pivot_index = partition(array);
+    let (left, right) = array.split_at_mut(pivot_index);
+    rayon::join(|| quicksort(left), || quicksort(&mut right[1..]));
+}
+
+fn partition<T: Ord>(array: &mut [T]) -> usize {
+    let pivot_index = array.len() / 2;
+    array.swap(pivot_index, array.len() - 1);
+    let mut store_index = 0;
+    for i in 0..array.len() - 1 {
+        if array[i] < array[array.len() - 1] {
+            array.swap(store_index, i);
+            store_index += 1;
+        }
+    }
+    array.swap(store_index, array.len() - 1);
+    store_index
+}
+
 #[pyfunction]
-fn par_argsort(xs: Vec<i32>) -> PyResult<Vec<usize>> {
-    type Candidate = (i32, usize);
-
-    fn parallel_merge(left: &[Candidate], right: &[Candidate], combined: &mut Vec<Candidate>) {
-        let total_len = left.len() + right.len();
-        combined.reserve(total_len);
-
-        let left_mid = left.len() / 2;
-        let right_mid = match right.binary_search_by(|probe| probe.0.cmp(&left[left_mid].0)) {
-            Ok(pos) | Err(pos) => pos,
-        };
-
-        let (left_low, left_high) = left.split_at(left_mid);
-        let (right_low, right_high) = right.split_at(right_mid);
-
-        let (mut combined_low, mut combined_high) = combined.split_at_mut(total_len - left_high.len() - right_high.len());
-
-        rayon::join(
-            || parallel_merge(left_low, right_low, &mut combined_low.to_vec()),
-            || parallel_merge(left_high, right_high, &mut combined_high.to_vec()),
-        );
-
-        let (mut i, mut j) = (0, 0);
-        while i < left_low.len() && j < right_low.len() {
-            if left_low[i].0 <= right_low[j].0 {
-                combined.push(left_low[i]);
-                i += 1;
-            } else {
-                combined.push(right_low[j]);
-                j += 1;
-            }
-        }
-
-        combined.extend_from_slice(&left_low[i..]);
-        combined.extend_from_slice(&right_low[j..]);
-    }
-
-    fn par_argsort_internal(xs: &[i32]) -> Vec<usize> {
-        if xs.len() <= 1 {
-            return (0..xs.len()).collect();
-        }
-
-        let mid = xs.len() / 2;
-        let (left, right) = xs.split_at(mid);
-
-        let (left_sorted, right_sorted): (Vec<usize>, Vec<usize>) = rayon::join(
-            || par_argsort_internal(left),
-            || par_argsort_internal(right),
-        );
-
-        let left_candidates: Vec<Candidate> = left_sorted.iter().map(|&i| (left[i], i)).collect();
-        let right_candidates: Vec<Candidate> = right_sorted.iter().map(|&i| (right[i], i + mid)).collect();
-
-        let mut merged_candidates = Vec::with_capacity(xs.len());
-        parallel_merge(&left_candidates, &right_candidates, &mut merged_candidates);
-
-        merged_candidates.into_iter().map(|c| c.1).collect()
-    }
-
-    Ok(par_argsort_internal(&xs))
+fn argsort(array: Vec<i32>) -> PyResult<Vec<usize>> {
+    let mut indices: Vec<usize> = (0..array.len()).collect();
+    indices.par_sort_by(|&i, &j| array[i].cmp(&array[j]));
+    Ok(indices)
 }
 
 /// A Python module implemented in Rust.
@@ -165,7 +134,7 @@ fn dotpro(m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dot_product, m)?)?;
     m.add_function(wrap_pyfunction!(matrix_mul_optimized_parallel, m)?)?;
     m.add_function(wrap_pyfunction!(dot_product_any, m)?)?;
-    m.add_function(wrap_pyfunction!(par_argsort, m)?)?;
+    m.add_function(wrap_pyfunction!(argsort, m)?)?;
     m.add_function(wrap_pyfunction!(dot_product_par_simd, m)?)?;
     Ok(())
 }
