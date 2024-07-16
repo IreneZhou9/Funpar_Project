@@ -1,10 +1,12 @@
 #![feature(portable_simd)]
-use std::simd::f64x64;
+use std::simd::{f64x64};
 use std::simd::num::SimdFloat;
+use std::simd::{SupportedLaneCount};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3::types::PyAny;
 use rayon::prelude::*;
+use rayon::ThreadPoolBuilder;
 use numpy::{IntoPyArray, PyArray1, ToPyArray};
 
 // dot product
@@ -60,10 +62,65 @@ fn argsort(array: Vec<i32>) -> PyResult<Vec<usize>> {
     Ok(indices)
 }
 
+// convolve
+#[pyfunction]
+/// Convolve two 1-dimensional slices using direct summation
+fn convolve(a: Vec<f64>, b: Vec<f64>) -> PyResult<Vec<f64>> {
+    let n = a.len();
+    let m = b.len();
+    let conv_len = n + m - 1;
+
+    // Use Rayon to parallelize the outer loop
+    let result: Vec<f64> = (0..conv_len)
+        .into_par_iter()
+        .map(|i| {
+            let mut sum = 0.0;
+            let start = if i >= m { i - m + 1 } else { 0 };
+            let end = if i < n { i + 1 } else { n };
+
+            for j in start..end {
+                sum += a[j] * b[i - j];
+            }
+
+            sum
+        })
+        .collect();
+
+    Ok(result)
+}
+
+#[pyfunction]
+/// Convolve two 1-dimensional slices using direct summation
+fn convolve_exp(a: Vec<f64>, b: Vec<f64>) -> PyResult<Vec<f64>> {
+    let n = a.len();
+    let m = b.len();
+    let conv_len = n + m - 1;
+
+    // Create a thread pool
+    let pool = ThreadPoolBuilder::new().build().unwrap();
+
+    let result: Vec<f64> = pool.install(|| {
+        (0..conv_len)
+            .into_par_iter()
+            .map(|i| {
+                let start = if i >= m { i - m + 1 } else { 0 };
+                let end = if i < n { i + 1 } else { n };
+                (start..end)
+                    .map(|j| a[j] * b[i - j])
+                    .sum::<f64>()
+            })
+            .collect()
+    });
+
+    Ok(result)
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn dotpro(m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(argsort, m)?)?;
     m.add_function(wrap_pyfunction!(dot_product_par_simd, m)?)?;
+    m.add_function(wrap_pyfunction!(convolve, m)?)?;
+    m.add_function(wrap_pyfunction!(convolve_exp, m)?)?;
     Ok(())
 }
