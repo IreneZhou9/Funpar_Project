@@ -32,29 +32,6 @@ fn dot(xs: &[f64], ys: &[f64]) -> f64 {
 }
 
 // argsort
-fn quicksort<T: Ord + Send>(array: &mut [T]) {
-    if array.len() <= 1 {
-        return;
-    }
-    let pivot_index = partition(array);
-    let (left, right) = array.split_at_mut(pivot_index);
-    rayon::join(|| quicksort(left), || quicksort(&mut right[1..]));
-}
-
-fn partition<T: Ord>(array: &mut [T]) -> usize {
-    let pivot_index = array.len() / 2;
-    array.swap(pivot_index, array.len() - 1);
-    let mut store_index = 0;
-    for i in 0..array.len() - 1 {
-        if array[i] < array[array.len() - 1] {
-            array.swap(store_index, i);
-            store_index += 1;
-        }
-    }
-    array.swap(store_index, array.len() - 1);
-    store_index
-}
-
 #[pyfunction]
 fn argsort(array: Vec<i32>) -> PyResult<Vec<usize>> {
     let mut indices: Vec<usize> = (0..array.len()).collect();
